@@ -3,15 +3,19 @@
 #include "riscv.h"
 
 extern char ekernel[];
+// chained table structure
 
+// requested pieces of dynamic memory 
 struct linklist {
 	struct linklist *next;
 };
 
+//free physical addresses 
 struct {
 	struct linklist *freelist;
 } kmem;
 
+// kfree [pa_start, pa_end)
 void freerange(void *pa_start, void *pa_end)
 {
 	char *p;
@@ -20,6 +24,9 @@ void freerange(void *pa_start, void *pa_end)
 		kfree(p);
 }
 
+
+// ekernel is the kernel code endpoint defined by the link script
+// PHYSTOP = 0x88000000
 void kinit()
 {
 	freerange(ekernel, (void *)PHYSTOP);

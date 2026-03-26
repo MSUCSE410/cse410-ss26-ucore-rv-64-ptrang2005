@@ -4,7 +4,7 @@
 
 static int app_num;
 static uint64 *app_info_ptr;
-extern char _app_num[];
+extern char _app_num[], ekernel[];
 
 // Count finished programs. If all apps exited, shutdown.
 int finished()
@@ -18,6 +18,11 @@ int finished()
 // Get user progs' infomation through pre-defined symbol in `link_app.S`
 void loader_init()
 {
+	// don't need this restriction anymore 
+	// if ((uint64)ekernel >= BASE_ADDRESS) {
+    //     panic("kernel too large...\n");
+    // }
+
 	app_info_ptr = (uint64 *)_app_num;
 	app_num = *app_info_ptr;
 	app_info_ptr++;
@@ -70,6 +75,8 @@ int run_all_app()
 		/*
 		* LAB1: you may need to initialize your new fields of proc here
 		*/
+	    memset(p->syscall_times, 0, sizeof(p->syscall_times));
+        p->start_time = 0;
 	}
 	return 0;
 }
