@@ -83,6 +83,9 @@ found:
 	p->max_page = 0;
 	p->parent = NULL;
 	p->exit_code = 0;
+	p->stride = 0;
+	p->priority = 16;
+	p->pass = BIG_STRIDE / p->priority;
 	p->pagetable = uvmcreate((uint64)p->trapframe);
 	memset(&p->context, 0, sizeof(p->context));
 	memset((void *)p->kstack, 0, KSTACK_SIZE);
@@ -99,7 +102,7 @@ found:
 //    via swtch back to the scheduler.
 void scheduler()
 {
-	struct proc *p;
+	// struct proc *p;
 	for (;;) {
 		/*int has_proc = 0;
 		for (p = pool; p < &pool[NPROC]; p++) {
@@ -114,14 +117,26 @@ void scheduler()
 		if(has_proc == 0) {
 			panic("all app are over!\n");
 		}*/
-		p = fetch_task();
-		if (p == NULL) {
+	    struct proc *best_proc = NULL;
+
+        for (struct proc *p = pool; p < &pool[NPROC]; p++) {
+            if (p->state != RUNNABLE)
+                continue;
+
+            if (best_proc == NULL || p->stride < best_proc->stride) {
+                best_proc = p;
+            }
+        }
+		if (best_proc == NULL) {
 			panic("all app are over!\n");
 		}
-		tracef("swtich to proc %d", p - pool);
-		p->state = RUNNING;
-		current_proc = p;
-		swtch(&idle.context, &p->context);
+		tracef("swtich to proc %d", best_proc - pool);
+		best_proc->state = RUNNING;
+		current_proc = best_proc;
+		
+		// update stride b4 switch
+		best_proc->stride += best_proc->pass;
+		swtch(&idle.context, &best_proc->context);
 	}
 }
 
@@ -144,7 +159,7 @@ void sched()
 void yield()
 {
 	current_proc->state = RUNNABLE;
-	add_task(current_proc);
+	// add_task(current_proc); // not using the normal queue 
 	sched();
 }
 
@@ -163,6 +178,29 @@ void freeproc(struct proc *p)
 		freepagetable(p->pagetable, p->max_page);
 	p->pagetable = 0;
 	p->state = UNUSED;
+}
+
+int spawn(char *filename)
+{
+	// check if the requested file exists 
+	int id = get_id_by_name(filename);
+    if (id < 0)
+        return -1;
+	
+    struct proc *p = allocproc(); // reserves a new PBC 
+    if (!p)
+        return -1;
+
+    struct proc *cur = curr_proc(); 
+    p->parent = cur;
+
+    if (loader(id, p) < 0) {
+		freeproc(p);
+        return -1;
+    }
+
+    p->state = RUNNABLE;
+    return p->pid;
 }
 
 int fork()
@@ -226,7 +264,7 @@ int wait(int pid, int *code)
 			return -1;
 		}
 		p->state = RUNNABLE;
-		add_task(p);
+		// add_task(p);
 		sched();
 	}
 }

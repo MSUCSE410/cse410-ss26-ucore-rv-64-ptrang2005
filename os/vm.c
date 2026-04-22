@@ -186,20 +186,28 @@ pagetable_t uvmcreate(uint64 trapframe)
 // All leaf mappings must already have been removed.
 void freewalk(pagetable_t pagetable)
 {
-	// there are 2^9 = 512 PTEs in a page table.
-	for (int i = 0; i < 512; i++) {
-		pte_t pte = pagetable[i];
-		if ((pte & PTE_V) && (pte & (PTE_R | PTE_W | PTE_X)) == 0) {
-			// this PTE points to a lower-level page table.
-			uint64 child = PTE2PA(pte);
-			freewalk((pagetable_t)child);
-			pagetable[i] = 0;
-		} else if (pte & PTE_V) {
-			panic("freewalk: leaf");
-		}
-	}
-	kfree((void *)pagetable);
+    for (int i = 0; i < 512; i++) {
+        pte_t pte = pagetable[i];
+
+        if (pte & PTE_V) {
+
+            // non-leaf: next level page table  
+            if ((pte & (PTE_R | PTE_W | PTE_X)) == 0) {
+                uint64 child = PTE2PA(pte);
+                freewalk((pagetable_t)child);
+            }
+
+            // leaf: user mapping -> free physical page  
+            else {
+                uint64 pa = PTE2PA(pte);
+                kfree((void *)pa);
+            }
+        }
+    }
+
+    kfree((void *)pagetable);
 }
+
 
 /**
  * @brief Free user memory pages, then free page-table pages.
